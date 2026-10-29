@@ -58,8 +58,16 @@ def pci_gpus(sysfs: str = "/sys/class/drm") -> list[dict[str, Any]]:
         drv = dev / "driver"
         if drv.exists():
             g["kernel_driver"] = drv.resolve().name
+        # Cards with their own PCIe switch (Intel Arc, some AMD) show an internal
+        # link on the GPU function, so read the link at the topmost bridge of the
+        # GPU's own vendor: the switch's upstream port, i.e. the link into the slot.
+        port = dev.resolve()
+        while (_read(port.parent / "class") or "").startswith("0x0604") and _read(port.parent / "vendor") == vendor:
+            port = port.parent
+        if port.name != addr:
+            g["pcie_link_port"] = port.name
         for key in ("current_link_speed", "current_link_width", "max_link_speed", "max_link_width"):
-            v = _read(dev / key)
+            v = _read(port / key)
             if v is not None:
                 g[key] = v
         bars = []
